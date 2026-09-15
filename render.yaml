@@ -1,0 +1,19 @@
+# Exported from Render on 2026-09-15T17:13:43Z
+version: "1"
+services:
+- type: web
+  name: blue_horizon
+  runtime: docker
+  repo: https://github.com/jbigishiro/blue_horizon
+  plan: free
+  envVars:
+  - key: REDIS_URL
+    sync: false
+  - key: DATABASE_URL
+    sync: false
+  - key: OPENAI_API_KEY
+    sync: false
+  region: virginia
+  dockerContext: .
+  dockerfilePath: ./Dockerfile
+  autoDeployTrigger: commit
