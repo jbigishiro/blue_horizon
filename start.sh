@@ -11,7 +11,7 @@ BACKEND_PID=$!
 sleep 2
 
 # Frontend: Streamlit — this is the port Hugging Face exposes publicly.
-streamlit run streamlit_app.py \
+streamlit run src/streamlit_app.py \
     --server.port 7860 \
     --server.address 0.0.0.0 \
     --server.headless true \
