@@ -247,12 +247,16 @@ def chat(request: Request, req: ChatRequest):
                 exclude_id = cleared.get("booking_id")
                 cleared["booking_id"] = None
                 action_result = orchestrator.continue_draft(
-                    req.message, customer_id, cleared, exclude_booking_id=exclude_id
+                    req.message, customer_id, cleared, exclude_booking_id=exclude_id,
+                    pending_question=pending.get("message"),
                 )
             elif prior_action_type == "book":
                 cleared["room_number"] = None
                 cleared["room_type"] = None
-                action_result = orchestrator.continue_draft(req.message, customer_id, cleared)
+                action_result = orchestrator.continue_draft(
+                    req.message, customer_id, cleared,
+                    pending_question=pending.get("message"),
+                )
             else:
                 action_result = orchestrator.continue_draft(
                     req.message, customer_id, dict(booking_agent.EMPTY_DRAFT)
@@ -282,7 +286,10 @@ def chat(request: Request, req: ChatRequest):
 
         if decision == "continue":
             draft = _draft_from(pending)
-            action_result = orchestrator.continue_draft(req.message, customer_id, draft)
+            action_result = orchestrator.continue_draft(
+                req.message, customer_id, draft,
+                pending_question=pending.get("message"),
+            )
             intent, answer, needs_confirmation = _apply_result(action_result, session)
         else:  # "abandon"
             session["pending_action"] = None

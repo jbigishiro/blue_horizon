@@ -374,9 +374,17 @@ def extract_update(message: str, current_draft: dict, reference_date: date | Non
     pending_question_block = (
         f'You just asked the guest this exact question: "{pending_question}"\n'
         "If the guest's CURRENT message is a short/bare answer to that question "
-        "(e.g. just a number, a yes/no, or a single word) with no other context, "
-        "attribute it to the field that question was asking about — do not leave "
-        "it null just because the message alone is ambiguous out of context.\n"
+        "(e.g. just a number, a date, a yes/no, or a single word/phrase) with no "
+        "other context, attribute it ONLY to the single field that question was "
+        "asking about — do not leave it null just because the message alone is "
+        "ambiguous out of context. Do NOT use this answer to change, recompute, "
+        "or 'correct' any OTHER field, even one whose established value the "
+        "answer might seem to affect (e.g. if the pending question was about "
+        "check-out, a reply like 'next Monday' sets ONLY check_out — it must "
+        "never change check_in, even if check_in could also plausibly be "
+        "described as 'next Monday' from some other reference point). If the "
+        "guest wants to change a different field too, they will say so "
+        "explicitly and separately.\n"
         if pending_question else ""
     )
 
@@ -395,8 +403,12 @@ def extract_update(message: str, current_draft: dict, reference_date: date | Non
         from the question it answers) — but still only output a field if the CURRENT message is what is actually 
         stating or changing it.
         If the current message contradicts an established value (e.g. a different room number than before), 
-        output the NEW value — that's a genuine change, not something to leave null.
-        Do not invent a room type, date, or booking ID that wasn't stated or clearly implied.
+        output the NEW value — that's a genuine change, not something to leave null. A "contradiction" means the 
+        guest explicitly restates or corrects that specific field — never infer a contradiction just because a 
+        relative phrase COULD be read as applying to a different field than the one it was actually given for.
+        Do not invent a room type, date, or booking ID that wasn't stated or clearly implied. In particular, never 
+        output both check_in and check_out from a single short answer unless the message genuinely states both 
+        (e.g. "next Monday for 3 nights") — a bare date/phrase answering one pending question fills that ONE field only.
         Dates MUST be output in ISO format YYYY-MM-DD, e.g. "2026-09-13" — never any other format.
     '''
 
@@ -547,7 +559,10 @@ def decide(draft: dict, customer_id: int, exclude_booking_id: str | None = None)
                 "message": "I need a check-in date to proceed — could you specify one?"}
     if check_out is None:
         return {**base, "status": "needs_clarification",
-                "message": "I need a check-out date to proceed — could you specify one?"}
+                "message": (
+                    f"Got it — check-in is {check_in.isoformat()}. "
+                    f"What date would you like to check out?"
+                )}
     if check_out <= check_in:
         return {**base, "status": "needs_clarification",
                 "message": "Check-out needs to be after check-in — could you double check the dates?"}
@@ -563,7 +578,9 @@ def decide(draft: dict, customer_id: int, exclude_booking_id: str | None = None)
     number_occupants = num_adults + num_children
 
     if room_number:
-    
+        # Guest named a specific room — check that exact room rather
+        # than running a type-based search that could return a
+        # different room entirely.
         try:
             best = check_room_availability(room_number, check_in, check_out, number_occupants)
         except BookingError as e:
@@ -598,7 +615,7 @@ def decide(draft: dict, customer_id: int, exclude_booking_id: str | None = None)
                 ),
             }
 
-        top_candidates = candidates[:7]
+        top_candidates = candidates[:5]
 
         if len(top_candidates) > 1:
             # Multiple matching rooms — let the guest choose rather than
@@ -607,9 +624,9 @@ def decide(draft: dict, customer_id: int, exclude_booking_id: str | None = None)
             # and the next call to decide() takes the room_number branch
             # above, which checks that exact room and proposes it directly.
             options = "\n".join(
-                f"- Room {c['room_number']} (room type: {c.get('type', room_type)}"
-                + (f", view type: {c['view_type']}" if c.get("view_type") else "")
-                + (f", maximum occupany: {c['max_occupancy']}" if c.get("max_occupancy") else "")
+                f"- Room {c['room_number']} ({c.get('type', room_type)}"
+                + (f", {c['view_type']}" if c.get("view_type") else "")
+                + (f", sleeps {c['max_occupancy']}" if c.get("max_occupancy") else "")
                 + f") — ${c['total_price']:.2f} total"
                 for c in top_candidates
             )
@@ -635,9 +652,9 @@ def decide(draft: dict, customer_id: int, exclude_booking_id: str | None = None)
         "num_children": num_children,
         "total_price": best["total_price"],
         "message": (
-            f"Your Reservation: Room number {best['room_number']} ({best.get('type', room_type)})  "
+            f"I found room {best['room_number']} ({best.get('type', room_type)}) available "
             f"from {check_in} to {check_out} for ${best['total_price']:.2f} "
-            f"total. Shall I book it for you?"
+            f"total. Shall I book it?"
         ),
     }
 
@@ -715,7 +732,9 @@ def confirm(proposal: dict) -> dict:
         return {"status": "failed", "message": str(e)}
 
 if __name__ == "__main__":
-
+    # Manual step-through test:
+    #   python action_agent.py "<message>" ["<message>" ...]
+    # Feeds each argument as a separate turn against a running draft.
     import sys
 
     draft = dict(EMPTY_DRAFT)

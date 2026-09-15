@@ -100,7 +100,8 @@ def _handle_knowledge_query(question: str) -> dict:
 
 
 def _process_and_wrap(message: str, customer_id: int, draft: dict,
-                       exclude_booking_id: str | None = None) -> dict:
+                       exclude_booking_id: str | None = None,
+                       pending_question: str | None = None) -> dict:
     """
     Calls booking_agent.process_turn() and converts any known failure
     into a normal chat answer instead of letting it propagate as an
@@ -108,9 +109,18 @@ def _process_and_wrap(message: str, customer_id: int, draft: dict,
     UNCHANGED draft (not a blank one) so the guest doesn't lose
     everything they'd already specified just because one message
     couldn't be parsed.
+
+    pending_question: the exact question asked in the previous turn
+    (if any), forwarded to booking_agent.process_turn() so a bare/
+    ambiguous reply (e.g. just a number) can be attributed to the
+    field that question was actually asking about.
     """
     try:
-        result = booking_agent.process_turn(message, customer_id, draft, exclude_booking_id=exclude_booking_id)
+        result = booking_agent.process_turn(
+            message, customer_id, draft,
+            exclude_booking_id=exclude_booking_id,
+            pending_question=pending_question,
+        )
     except booking_agent.ActionError as e:
         result = {**draft, "status": "needs_clarification", "message": str(e)}
     except booking_agent.BookingError as e:
@@ -154,7 +164,8 @@ def _handle_action(question: str, customer_id: int | None) -> dict:
 
 
 def continue_draft(message: str, customer_id: int, draft: dict,
-                    exclude_booking_id: str | None = None) -> dict:
+                    exclude_booking_id: str | None = None,
+                    pending_question: str | None = None) -> dict:
     """
     Continues an in-progress booking/cancellation draft with a new
     message. This replaces the old continue_action(), which
@@ -163,8 +174,16 @@ def continue_draft(message: str, customer_id: int, draft: dict,
     (see booking_agent.merge_draft), so earlier answers can never be
     silently forgotten or overwritten by stale text sitting elsewhere
     in a growing string.
+
+    pending_question: the exact question asked in the previous turn
+    (typically the prior draft's "message"), if any. Passed straight
+    through to booking_agent.process_turn() so a bare reply like "0"
+    can be attributed to the right field instead of coming back
+    ambiguous every time.
     """
-    return _process_and_wrap(message, customer_id, draft, exclude_booking_id=exclude_booking_id)
+    return _process_and_wrap(message, customer_id, draft,
+                              exclude_booking_id=exclude_booking_id,
+                              pending_question=pending_question)
 
 
 def _handle_chitchat(question: str) -> dict:
