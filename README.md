@@ -98,7 +98,6 @@ Create `.env` in the project root:
 
 ```dotenv
 DATABASE_URL=postgresql://user:pass@host/db?sslmode=require
-READONLY_DATABASE_URL=postgresql://readonly_user:pass@host/db?sslmode=require
 REDIS_URL=redis://default:pass@host:port
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o                 
